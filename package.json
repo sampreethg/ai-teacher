@@ -1,0 +1,40 @@
+{
+  "name": "ai-teacher",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"next,avatar,ai\" -c \"blue,magenta,green\" \"next dev\" \"node ai-teacher-avatar/backend/server.js\" \"python -m uvicorn api.main:app --port 8000 --host 0.0.0.0 --app-dir AI_Teacher/AI_Teacher\"",
+    "dev:next": "next dev",
+    "dev:avatar": "node ai-teacher-avatar/backend/server.js",
+    "dev:ai": "python -m uvicorn api.main:app --port 8000 --host 0.0.0.0 --app-dir AI_Teacher/AI_Teacher",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@google/genai": "^2.21.0",
+    "@heygen/liveavatar-web-sdk": "^0.0.18",
+    "@prisma/client": "^5.14.0",
+    "@vercel/postgres": "^0.10.0",
+    "lucide-react": "^0.378.0",
+    "next": "14.2.3",
+    "next-auth": "^4.24.15",
+    "next-themes": "^0.4.6",
+    "pdf-parse": "^1.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^10.0.5",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^16.3.4",
+    "postcss": "^8.4.38",
+    "prisma": "^5.14.0",
+    "tailwindcss": "^3.4.3",
+    "typescript": "^5.4.5"
+  }
+}
