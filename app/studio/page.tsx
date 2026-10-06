@@ -886,6 +886,7 @@ function StudioContent() {
         onClose={() => setIsVideoModalOpen(false)}
         sourceCount={totalCount}
         lessonTitle={notebookTitle}
+        sources={sources.filter(s => s.selected)}
       />
 
     </div>

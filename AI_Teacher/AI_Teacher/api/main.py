@@ -29,7 +29,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,6 +46,7 @@ class LessonRequest(BaseModel):
     language: str
     duration: int
     style: str
+    context: str = ""
 
 
 class QuestionRequest(BaseModel):
@@ -114,14 +115,14 @@ Student Question: {request.message}
 Provide a clear, pedagogical, structured explanation with Markdown formatting, bullet points, and key derivations grounded in educational materials.
 """
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-1.5-flash",
                 contents=prompt
             )
             return {"response": response.text}
         else:
-            return {"response": f"AI Teacher ({request.topic}): In response to '{request.message}', core physical and mathematical derivations apply."}
+            return {"response": "API key not configured."}
     except Exception as e:
-        return {"response": f"AI Teacher grounded breakdown for '{request.message}': All derivations follow foundational conservation and boundary laws."}
+        return {"response": "Error generating response. Please try again."}
 
 
 # =========================
@@ -163,7 +164,7 @@ Respond directly to the student in a supportive, crystal-clear, conversational m
 Clarify the doubt directly and transition encouragingly back to the lesson.
 """
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-1.5-flash",
                 contents=prompt
             )
             explanation = response.text.strip()
@@ -177,9 +178,9 @@ Clarify the doubt directly and transition encouragingly back to the lesson.
         print(f"[ask_doubt] AI generation error: {err}")
 
     # Fallback explanation
-    fallback = f"Great question! When both force and mass are doubled, acceleration stays constant because acceleration is force divided by mass: (2F) over (2m) simplifies right back to F over m. Does that make sense?"
+    fallback = "I'm having trouble connecting right now, but that is a great question!"
     return {
-        "status": "success",
+        "status": "error",
         "question": query,
         "explanation": fallback,
         "response": fallback
@@ -201,7 +202,8 @@ def create_lesson(request: LessonRequest):
         level=request.level,
         language=request.language,
         duration=request.duration,
-        style=request.style
+        style=request.style,
+        context=request.context
     )
 
     return {

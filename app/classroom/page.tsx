@@ -18,7 +18,7 @@ import {
   Mic
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
-import LiveAvatar, { LiveAvatarRef } from '@/components/studio/LiveAvatar';
+import LiveAvatar, { LiveAvatarRef, AvatarStatus } from '@/components/studio/LiveAvatar';
 import { useTheme } from 'next-themes';
 import { getVoiceByLanguage } from '@/lib/config/voices';
 
@@ -31,7 +31,9 @@ function ClassroomContent() {
   const focus = searchParams.get('focus');
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState<'A' | 'B' | null>(null);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<any>(null);
+  const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<{
     result: string;
@@ -42,6 +44,8 @@ function ClassroomContent() {
   } | null>(null);
   const [lessonContent, setLessonContent] = useState<string>('');
   const [isLoadingLesson, setIsLoadingLesson] = useState(true);
+  const [avatarStatus, setAvatarStatus] = useState<AvatarStatus>('idle');
+  const [hasSpokenLesson, setHasSpokenLesson] = useState(false);
   
   // "Raise Hand" & Voice Questioning States
   const [isListening, setIsListening] = useState(false);
@@ -158,7 +162,7 @@ function ClassroomContent() {
         avatarRef.current?.speak(explanation);
       } else {
         // Fallback explanation
-        const fallback = "When both force and mass are doubled, acceleration stays constant because acceleration is force divided by mass: (2F) over (2m) simplifies right back to F over m.";
+        const fallback = "I'm sorry, I encountered an error analyzing your doubt.";
         setDoubtExplanation(fallback);
         avatarRef.current?.speak(fallback);
       }
@@ -178,6 +182,9 @@ function ClassroomContent() {
     async function fetchLesson() {
       setIsLoadingLesson(true);
       try {
+        const storedSources = sessionStorage.getItem('activeSources');
+        const sourcesContext = storedSources ? JSON.parse(storedSources).map((s: any) => s.snippet).join('\n') : '';
+
         const res = await fetch('http://localhost:8000/api/lesson', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -186,16 +193,42 @@ function ClassroomContent() {
             level: 'Beginner',
             language: lang || 'English',
             duration: format === 'short' ? 5 : format === 'cinematic' ? 60 : 20,
-            style: 'Conceptual & Real-world examples'
+            style: 'Conceptual & Real-world examples',
+            context: sourcesContext
           })
         }).catch(() => null);
 
         if (res && res.ok) {
           const data = await res.json();
           setLessonContent(data.lesson || '');
+          
+          setIsLoadingQuestion(true);
+          try {
+            const qRes = await fetch('http://localhost:8000/api/question', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                topic: topicTitle,
+                lesson: data.lesson || '',
+                level: 'Beginner',
+                difficulty: 'Easy',
+                number_of_questions: 1
+              })
+            }).catch(() => null);
+            if (qRes && qRes.ok) {
+              const qData = await qRes.json();
+              if (qData.questions && qData.questions.length > 0) {
+                setCurrentQuestion(qData.questions[0]);
+              }
+            }
+          } catch (e) {
+            console.error(e);
+          } finally {
+            setIsLoadingQuestion(false);
+          }
         } else {
           setLessonContent(
-            "Newton's Second Law of Motion: F_net = m * a. Acceleration is directly proportional to applied force and inversely proportional to inertial mass."
+            "Failed to generate lesson. Please try again."
           );
         }
       } catch (err) {
@@ -208,14 +241,22 @@ function ClassroomContent() {
     fetchLesson();
   }, [topicTitle, lang, format]);
 
+  // Trigger avatar to speak the lesson when it becomes connected
+  useEffect(() => {
+    if (avatarStatus === 'connected' && lessonContent && !hasSpokenLesson) {
+      avatarRef.current?.speak(lessonContent);
+      setHasSpokenLesson(true);
+    }
+  }, [avatarStatus, lessonContent, hasSpokenLesson]);
+
   // Submit Answer to FastAPI Socratic Evaluation Engine
   const handleSubmitAnswer = async () => {
     if (!selectedAnswer || isEvaluating) return;
     setIsEvaluating(true);
 
-    const questionText = "If an applied force is doubled while the mass of the object is also doubled, what happens to the acceleration?";
-    const studentAnswerText = selectedAnswer === 'A' ? "It doubles" : "It stays exactly the same";
-    const correctAnswerText = "It stays exactly the same";
+    const questionText = currentQuestion ? currentQuestion.question : "If an applied force is doubled while the mass of the object is also doubled, what happens to the acceleration?";
+    const studentAnswerText = currentQuestion ? currentQuestion.options[selectedAnswer] : (selectedAnswer === 'A' ? "It doubles" : "It stays exactly the same");
+    const correctAnswerText = currentQuestion ? currentQuestion.options[currentQuestion.correct_answer] : "It stays exactly the same";
 
     try {
       const res = await fetch('http://localhost:8000/evaluate_answer', {
@@ -230,18 +271,12 @@ function ClassroomContent() {
       }).catch(() => null);
 
       if (!res || !res.ok) {
-        // Resilient deterministic fallback
-        const isCorrect = selectedAnswer === 'B';
         const fallback = {
-          result: isCorrect ? 'CORRECT' : 'INCORRECT',
-          score: isCorrect ? 100 : 0,
-          explanation: isCorrect
-            ? 'Mastery Confirmed! (2F) / (2m) = F/m = a. The factor of 2 cancels out in both numerator and denominator, leaving acceleration unchanged.'
-            : 'Misconception Detected! Both force and mass doubled, so the ratio 2F over 2m cancels out to 1, leaving acceleration unchanged.',
-          misconception: isCorrect
-            ? ''
-            : 'Student assumes doubling force always doubles acceleration even when mass is proportionally doubled.',
-          recommended_action: isCorrect ? 'CONTINUE' : 'RETEACH'
+          result: 'ERROR',
+          score: 0,
+          explanation: 'There was an error evaluating your answer. Please try again.',
+          misconception: '',
+          recommended_action: 'CONTINUE'
         };
         setEvaluationResult(fallback);
         avatarRef.current?.speak(fallback.explanation);
@@ -338,6 +373,7 @@ function ClassroomContent() {
                   ? "Analyzing doubt with Gemini..."
                   : null
               }
+              onStatusChange={(status) => setAvatarStatus(status)}
               className="flex-1"
             />
 
@@ -472,46 +508,70 @@ function ClassroomContent() {
                 </div>
 
                 <p className={`text-xs font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                  &quot;If an applied force is doubled while the mass of the object is also doubled, what happens to the acceleration?&quot;
+                  {isLoadingQuestion ? "Generating dynamic question..." : `"${currentQuestion ? currentQuestion.question : "If an applied force is doubled while the mass of the object is also doubled, what happens to the acceleration?"}"`}
                 </p>
 
                 {/* Multiple Choice Options */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedAnswer('A');
-                      setEvaluationResult(null);
-                    }}
-                    className={`p-3 rounded-lg border text-left transition-all flex items-center gap-2 cursor-pointer ${
-                      selectedAnswer === 'A'
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50'
-                        : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-cyan-500' : 'bg-white border-slate-200 text-slate-700 hover:border-cyan-500'
-                    }`}
-                  >
-                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      selectedAnswer === 'A' ? 'bg-amber-500 text-slate-950' : 'bg-slate-600 text-white'
-                    }`}>A</span>
-                    <span>It doubles</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedAnswer('B');
-                      setEvaluationResult(null);
-                    }}
-                    className={`p-3 rounded-lg border text-left transition-all flex items-center gap-2 cursor-pointer ${
-                      selectedAnswer === 'B'
-                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/50'
-                        : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-cyan-500' : 'bg-white border-slate-200 text-slate-700 hover:border-cyan-500'
-                    }`}
-                  >
-                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      selectedAnswer === 'B' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-600 text-white'
-                    }`}>B</span>
-                    <span>It stays exactly the same</span>
-                  </button>
+                  {currentQuestion ? (
+                    Object.entries(currentQuestion.options).map(([key, value]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAnswer(key);
+                          setEvaluationResult(null);
+                        }}
+                        className={`p-3 rounded-lg border text-left transition-all flex items-center gap-2 cursor-pointer ${
+                          selectedAnswer === key
+                            ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50'
+                            : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-cyan-500' : 'bg-white border-slate-200 text-slate-700 hover:border-cyan-500'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                          selectedAnswer === key ? 'bg-amber-500 text-slate-950' : 'bg-slate-600 text-white'
+                        }`}>{key}</span>
+                        <span>{value as string}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedAnswer('A');
+                          setEvaluationResult(null);
+                        }}
+                        className={`p-3 rounded-lg border text-left transition-all flex items-center gap-2 cursor-pointer ${
+                          selectedAnswer === 'A'
+                            ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50'
+                            : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-cyan-500' : 'bg-white border-slate-200 text-slate-700 hover:border-cyan-500'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                          selectedAnswer === 'A' ? 'bg-amber-500 text-slate-950' : 'bg-slate-600 text-white'
+                        }`}>A</span>
+                        <span>It doubles</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedAnswer('B');
+                          setEvaluationResult(null);
+                        }}
+                        className={`p-3 rounded-lg border text-left transition-all flex items-center gap-2 cursor-pointer ${
+                          selectedAnswer === 'B'
+                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/50'
+                            : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:border-cyan-500' : 'bg-white border-slate-200 text-slate-700 hover:border-cyan-500'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                          selectedAnswer === 'B' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-600 text-white'
+                        }`}>B</span>
+                        <span>It stays exactly the same</span>
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 {/* Submit Answer Action Button */}

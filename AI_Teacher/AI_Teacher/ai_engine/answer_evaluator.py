@@ -56,7 +56,7 @@ Rules:
 
     try:
         response = client.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-1.5-flash",
             contents=prompt,
             config={
                 "response_mime_type": "application/json"
@@ -67,31 +67,14 @@ Rules:
         evaluation = json.loads(response.text)
         return evaluation
     except Exception as e:
-        print(f"[evaluate_answer warning] Gemini API error: {e}. Using deterministic pedagogical evaluation.")
-        norm_student = student_answer.strip().lower()
-        norm_correct = correct_answer.strip().lower()
-
-        is_correct = (
-            norm_student == norm_correct
-            or (norm_student in ["b", "same", "stays the same", "it stays exactly the same"])
-        )
-
-        if is_correct:
-            return {
-                "result": "CORRECT",
-                "score": 100,
-                "explanation": "Mastery Confirmed! (2F) / (2m) = F/m = a. The ratio simplifies to 1, so the acceleration remains unchanged.",
-                "misconception": "",
-                "recommended_action": "CONTINUE"
-            }
-        else:
-            return {
-                "result": "INCORRECT",
-                "score": 0,
-                "explanation": "Misconception Detected! Both force and mass doubled, so the ratio 2F over 2m cancels out to 1, leaving acceleration unchanged.",
-                "misconception": "Student assumes doubling force always doubles acceleration even when mass is proportionally doubled.",
-                "recommended_action": "RETEACH"
-            }
+        print(f"[evaluate_answer warning] Gemini API error: {e}")
+        return {
+            "result": "ERROR",
+            "score": 0,
+            "explanation": "There was an error evaluating your answer. Please try again.",
+            "misconception": "",
+            "recommended_action": "CONTINUE"
+        }
 
 
 if __name__ == "__main__":

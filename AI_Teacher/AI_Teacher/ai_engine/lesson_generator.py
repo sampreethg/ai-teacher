@@ -14,7 +14,7 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 
-def generate_lesson(topic, level, language, duration, style):
+def generate_lesson(topic, level, language, duration, style, context=""):
     prompt = f"""
 You are an expert multilingual AI teacher and curriculum designer.
 
@@ -25,6 +25,7 @@ Student Level: {level}
 Target Language: {language}
 Duration: {duration} minutes
 Teaching Style: {style}
+Context / Sources: {context if context else 'General Knowledge'}
 
 CRITICAL LANGUAGE REQUIREMENT:
 The lesson must be written entirely in the specified Target Language ({language}).
@@ -52,28 +53,13 @@ Return the lesson in a well-structured Markdown format.
 
     try:
         response = client.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-1.5-flash",
             contents=prompt
         )
         return response.text
     except Exception as e:
-        print(f"[generate_lesson warning] Gemini API error: {e}. Using grounded curriculum lesson structure.")
-        return f"""# {topic}
-
-## 1. Introduction
-Welcome to this masterclass on {topic}. In physics and engineering, understanding how forces relate to acceleration and mass is the cornerstone of classical dynamics.
-
-## 2. Main Concepts
-- **Newton's Second Law**: $\\vec{{F}}_{{\\text{{net}}}} = m \\cdot \\vec{{a}}$
-- **Direct Proportionality**: Force and acceleration scale together.
-- **Inverse Proportionality**: Doubling mass halves acceleration under constant net force.
-
-## 3. Real-World Applications
-Think of accelerating a small sports car vs. a heavy freight locomotive. The larger mass requires vastly more force to reach identical velocity.
-
-## 4. Key Takeaways & Summary
-Always balance equations symmetrically: $\\vec{{a}} = \\frac{{\\vec{{F}}_{{\\text{{net}}}}}}{{m}}$.
-"""
+        print(f"[generate_lesson warning] Gemini API error: {e}")
+        return f"# Error generating lesson\n\nThere was an error generating the lesson for {topic}. Please try again later."
 
 
 if __name__ == "__main__":

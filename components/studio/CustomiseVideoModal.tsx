@@ -22,6 +22,7 @@ export interface CustomiseVideoModalProps {
   onClose: () => void;
   sourceCount?: number;
   lessonTitle?: string;
+  sources?: any[];
 }
 
 export type VideoFormat = 'short' | 'explainer' | 'cinematic';
@@ -30,7 +31,8 @@ export default function CustomiseVideoModal({
   isOpen,
   onClose,
   sourceCount = 25,
-  lessonTitle = 'The Google Account Authentication Portal'
+  lessonTitle = 'The Google Account Authentication Portal',
+  sources = []
 }: CustomiseVideoModalProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -64,6 +66,12 @@ export default function CustomiseVideoModal({
       voice_id: voiceConfig.id,
       focus: finalTopic
     });
+
+    if (sources && sources.length > 0) {
+      sessionStorage.setItem('activeSources', JSON.stringify(sources));
+    } else {
+      sessionStorage.removeItem('activeSources');
+    }
 
     setTimeout(() => {
       onClose();

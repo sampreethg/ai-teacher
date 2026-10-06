@@ -657,3 +657,15 @@
     - Bound `directUrl` to `env("POSTGRES_URL_NON_POOLING")` for migration deployments.
 - **Verification:**
   - Successfully transitioned the database schema layer to be production-ready for serverless environments.
+
+### Entry 029 - Backend Integration: Document Ingestion to Avatar Lesson Generation
+- **Timestamp:** 2026-09-05
+- **Action:** Connected the RAG document ingestion flow directly to the Python FastAPI backend and HeyGen Live Avatar.
+- **Files Modified:**
+  - `components/studio/CustomiseVideoModal.tsx`: Save selected sources to sessionStorage before routing.
+  - `app/studio/page.tsx`: Pass the selected source snippets to CustomiseVideoModal.
+  - `app/classroom/page.tsx`: Retrieve sources from sessionStorage, inject as context in FastAPI request, track avatar connection status, and trigger avatar speak() once connected.
+  - `AI_Teacher/AI_Teacher/api/main.py` & `AI_Teacher/AI_Teacher/ai_engine/lesson_generator.py`: Added context parameter to LessonRequest model and Gemini prompt for strictly grounded synthesis.
+- **Verification:**
+  - Verified data flow from UI -> sessionStorage -> Next.js fetch -> FastAPI LessonRequest -> Gemini Generator -> HeyGen Avatar Speak.
+
