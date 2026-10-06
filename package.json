@@ -7,7 +7,7 @@
     "dev:next": "next dev",
     "dev:avatar": "node ai-teacher-avatar/backend/server.js",
     "dev:ai": "python -m uvicorn api.main:app --port 8000 --host 0.0.0.0 --app-dir AI_Teacher/AI_Teacher",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && prisma db push --accept-data-loss && next build",
     "start": "next start",
     "lint": "next lint"
   },
