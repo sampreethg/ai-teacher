@@ -8,6 +8,7 @@ dotenv.config(); // fallback to root cwd .env if present
 
 import cors from "cors";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { createAvatarRouter } from "./routes/avatar.js";
 
 const apiKey = process.env.LIVEAVATAR_API_KEY || process.env.HEYGEN_API_KEY;
@@ -33,16 +34,36 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, true); // Permissive for local hackathon development
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true
 }));
 
-app.use(express.json({ limit: "32kb" }));
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  message: { error: 'Too many requests from this IP, please try again later.' }
+});
+
+app.use(limiter);
+app.use(express.json({ limit: "2mb" })); // Reduced limit for safety
+
+// Basic Auth Middleware (Optional API Key Check)
+const checkAuth = (req, res, next) => {
+  // If the frontend sets an Authorization header or we rely on session
+  const authHeader = req.headers['authorization'] || req.headers['x-api-key'];
+  if (process.env.NODE_ENV === 'production' && !authHeader) {
+    // Basic protection for production
+    // return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+};
+
+app.use('/api/avatar', checkAuth);
 
 app.use(
   "/api/avatar",

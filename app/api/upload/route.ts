@@ -1,25 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+
+// Simple in-memory rate limiter
+const rateLimit = new Map<string, { count: number; resetTime: number }>();
+const MAX_REQUESTS = 10;
+const WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_MIME_TYPES = ['application/pdf', 'text/plain', 'text/markdown'];
+const ALLOWED_EXTENSIONS = ['.pdf', '.txt', '.md'];
 
 export async function POST(request: NextRequest) {
   try {
+    // 1. Authentication
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || 'hackathon-ai-teacher-secret-key-12345' });
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 401 });
+    }
+
+    // 2. Rate Limiting
+    const ip = request.ip || request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const now = Date.now();
+    const userLimit = rateLimit.get(ip);
+    if (!userLimit || now > userLimit.resetTime) {
+      rateLimit.set(ip, { count: 1, resetTime: now + WINDOW_MS });
+    } else if (userLimit.count >= MAX_REQUESTS) {
+      return NextResponse.json({ success: false, error: 'Too many requests. Please try again later.' }, { status: 429 });
+    } else {
+      userLimit.count += 1;
+    }
+
     const formData = await request.formData();
     const file = formData.get('file');
 
     if (!file || !(file instanceof Blob)) {
-      return NextResponse.json(
-        { success: false, error: 'No valid file found in request payload.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'No valid file found.' }, { status: 400 });
     }
 
     const fileName = (file as any).name || 'uploaded_document.pdf';
+    const extension = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
+    
+    // 3. File Restrictions
+    if (!ALLOWED_MIME_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(extension)) {
+      return NextResponse.json({ success: false, error: 'Invalid file type. Only PDF, TXT, and MD are allowed.' }, { status: 415 });
+    }
+
+    // 4. Size Limits
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ success: false, error: 'File size exceeds 5MB limit.' }, { status: 413 });
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
     let extractedText = '';
 
     if (fileName.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf') {
-      // Require lib/pdf-parse.js directly to avoid pdf-parse's index.js debug block (which triggers on Next.js bundling)
       let pdfParse;
       try {
         pdfParse = require('pdf-parse/lib/pdf-parse.js');
@@ -41,7 +76,6 @@ export async function POST(request: NextRequest) {
         throw new Error('Unsupported PDF parsing format.');
       }
     } else {
-      // Plain text, markdown, or text-encoded documents
       extractedText = buffer.toString('utf-8').trim();
     }
 
@@ -53,12 +87,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[API /api/upload] Error extracting text from document:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || 'Failed to extract text from document.'
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: error.message || 'Failed to extract text from document.' }, { status: 500 });
   }
 }
