@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 import { useTheme } from 'next-themes';
+import { signIn } from 'next-auth/react';
 
 export interface LoginFormValues {
   email: string;
@@ -114,9 +115,16 @@ export default function AuthCard({ initialMode = 'login' }: AuthCardProps) {
 
     setIsLoading(true);
     try {
-      // Ready to hook into NextAuth:
-      // const res = await signIn('credentials', { redirect: false, email: loginForm.email, password: loginForm.password });
-      await new Promise((resolve) => setTimeout(resolve, 900));
+      const res = await signIn('credentials', { 
+        redirect: false, 
+        email: loginForm.email, 
+        password: loginForm.password 
+      });
+
+      if (res?.error) {
+        setErrorMessage(res.error);
+        return;
+      }
 
       setSuccessMessage('Welcome back! Redirecting to your AI Classroom Dashboard...');
       setTimeout(() => {
@@ -161,8 +169,32 @@ export default function AuthCard({ initialMode = 'login' }: AuthCardProps) {
 
     setIsLoading(true);
     try {
-      // Ready to hook into NextAuth or registration endpoint:
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const registerRes = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: registerForm.name,
+          email: registerForm.email,
+          password: registerForm.password,
+        }),
+      });
+
+      if (!registerRes.ok) {
+        const data = await registerRes.json();
+        setErrorMessage(data.message || 'Registration failed.');
+        return;
+      }
+
+      const loginRes = await signIn('credentials', {
+        redirect: false,
+        email: registerForm.email,
+        password: registerForm.password,
+      });
+
+      if (loginRes?.error) {
+        setErrorMessage('Registered successfully, but failed to log in automatically.');
+        return;
+      }
 
       setSuccessMessage('Account created successfully! Preparing your learning environment...');
       setTimeout(() => {
