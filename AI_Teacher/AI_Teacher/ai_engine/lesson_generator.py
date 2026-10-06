@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from google import genai
+from ai_engine.rag_retriever import retrieve_relevant_context
 
 # Load API key from .env
 load_dotenv()
@@ -10,6 +11,9 @@ client = genai.Client(api_key=api_key) if api_key else None
 
 
 def generate_lesson(topic, level, language, duration, style, context=""):
+    # Apply RAG to extract only the most relevant parts of the uploaded document
+    rag_context = retrieve_relevant_context(topic=topic, full_context=context, max_chars=8000)
+    
     prompt = f"""
 You are an expert multilingual AI teacher and curriculum designer.
 
@@ -20,7 +24,7 @@ Student Level: {level}
 Target Language: {language}
 Duration: {duration} minutes
 Teaching Style: {style}
-Context / Sources: {context if context else 'General Knowledge'}
+Context / Sources: {rag_context if rag_context else 'General Knowledge'}
 
 CRITICAL LANGUAGE REQUIREMENT:
 The lesson must be written entirely in the specified Target Language ({language}).
