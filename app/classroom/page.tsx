@@ -42,6 +42,9 @@ function ClassroomContent() {
     misconception?: string;
     recommended_action?: string;
   } | null>(null);
+  const [reteachContent, setReteachContent] = useState<string>('');
+  const [adaptiveDecision, setAdaptiveDecision] = useState<any>(null);
+  const [upcomingQuestion, setUpcomingQuestion] = useState<any>(null);
   const [lessonContent, setLessonContent] = useState<string>('');
   const [isLoadingLesson, setIsLoadingLesson] = useState(true);
   const [avatarStatus, setAvatarStatus] = useState<AvatarStatus>('idle');
@@ -259,10 +262,12 @@ function ClassroomContent() {
     const correctAnswerText = currentQuestion ? currentQuestion.options[currentQuestion.correct_answer] : "It stays exactly the same";
 
     try {
-      const res = await fetch('http://localhost:8000/evaluate_answer', {
+      const res = await fetch('http://localhost:8000/api/teach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          topic: topicTitle,
+          level: 'Beginner',
           question: questionText,
           correct_answer: correctAnswerText,
           student_answer: studentAnswerText,
@@ -284,8 +289,28 @@ function ClassroomContent() {
       }
 
       const data = await res.json();
-      setEvaluationResult(data);
-      avatarRef.current?.speak(data.explanation || (data.result === 'CORRECT' ? 'Mastery Confirmed!' : 'Misconception Detected!'));
+      
+      if (data.status === 'error') {
+        const fallback = {
+          result: 'ERROR',
+          score: 0,
+          explanation: data.message || 'Error from adaptive engine.',
+        };
+        setEvaluationResult(fallback);
+        return;
+      }
+
+      setEvaluationResult(data.evaluation);
+      setAdaptiveDecision(data.adaptive_decision);
+      setReteachContent(data.reteach_content);
+      setUpcomingQuestion(data.next_question);
+
+      let speechContent = data.evaluation.explanation;
+      if (data.reteach_content) {
+        speechContent += " " + data.reteach_content;
+      }
+      
+      avatarRef.current?.speak(speechContent || (data.evaluation.result === 'CORRECT' ? 'Mastery Confirmed!' : 'Misconception Detected!'));
     } catch (err) {
       console.error('Error submitting answer:', err);
     } finally {
@@ -296,6 +321,16 @@ function ClassroomContent() {
   const handleReset = () => {
     setSelectedAnswer(null);
     setEvaluationResult(null);
+    setAdaptiveDecision(null);
+    setReteachContent('');
+    setUpcomingQuestion(null);
+  };
+
+  const handleNextQuestion = () => {
+    if (upcomingQuestion) {
+      setCurrentQuestion(upcomingQuestion);
+    }
+    handleReset();
   };
 
   const isDarkMode = mounted ? resolvedTheme === 'dark' : true;
@@ -652,14 +687,27 @@ function ClassroomContent() {
                         )}
 
                         <div className="text-slate-300 text-[11px] pl-6 bg-rose-950/30 p-2.5 rounded-lg border border-rose-800/30">
-                          <strong className="text-rose-300">Remediation Guide:</strong> Notice how force is in the numerator and mass is in the denominator: <code>a = (2F) / (2m) = (2/2) &middot; (F/m) = 1 &middot; a</code>. The factors of 2 cancel each other out algebraically!
+                          <strong className="text-rose-300">Targeted Reteach:</strong> {reteachContent || 'Notice how the fundamental rules apply. Please review the core concepts carefully before proceeding.'}
                         </div>
 
-                        {evaluationResult.recommended_action && (
+                        {adaptiveDecision && (
                           <div className="text-[10px] text-rose-300/80 pl-6 uppercase font-bold">
-                            Adaptive Action: {evaluationResult.recommended_action}
+                            Adaptive Action: {adaptiveDecision.action} &bull; Next Difficulty: {adaptiveDecision.difficulty}
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* Continue Button */}
+                    {upcomingQuestion && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={handleNextQuestion}
+                          className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors border border-slate-700"
+                        >
+                          Continue to Next Question &rarr;
+                        </button>
                       </div>
                     )}
                   </div>
