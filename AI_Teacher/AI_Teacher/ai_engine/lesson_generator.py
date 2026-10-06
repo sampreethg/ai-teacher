@@ -6,12 +6,7 @@ from google import genai
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
-
-if not api_key:
-    raise ValueError("GEMINI_API_KEY not found in .env file")
-
-# Create Gemini client
-client = genai.Client(api_key=api_key)
+client = genai.Client(api_key=api_key) if api_key else None
 
 
 def generate_lesson(topic, level, language, duration, style, context=""):
@@ -52,6 +47,9 @@ Return the lesson in a well-structured Markdown format.
 """
 
     try:
+        if not client:
+            return "# Configuration Error\n\nAI service unavailable (credentials missing). Please configure GEMINI_API_KEY."
+
         response = client.models.generate_content(
             model="gemini-1.5-flash",
             contents=prompt

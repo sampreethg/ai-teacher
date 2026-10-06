@@ -6,11 +6,7 @@ from google import genai
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
-
-if not api_key:
-    raise ValueError("GEMINI_API_KEY not found in .env file")
-
-client = genai.Client(api_key=api_key)
+client = genai.Client(api_key=api_key) if api_key else None
 
 
 def generate_questions(
@@ -60,15 +56,21 @@ Rules:
 - Do not include anything outside the JSON.
 """
 
-    response = client.models.generate_content(
-        model="gemini-1.5-flash",
-        contents=prompt,
-        config={
-            "response_mime_type": "application/json"
-        }
-    )
+    try:
+        if not client:
+            return {"error": "AI service unavailable (credentials missing)", "questions": []}
 
-    return json.loads(response.text)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt,
+            config={
+                "response_mime_type": "application/json"
+            }
+        )
+        return json.loads(response.text)
+    except Exception as e:
+        print(f"[generate_questions warning] API error: {e}")
+        return {"error": "An internal error occurred while generating questions.", "questions": []}
 
 
 if __name__ == "__main__":

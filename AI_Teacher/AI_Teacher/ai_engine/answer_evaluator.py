@@ -7,12 +7,7 @@ from google import genai
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
-
-if not api_key:
-    raise ValueError("GEMINI_API_KEY not found in .env file")
-
-# Create Gemini client
-client = genai.Client(api_key=api_key)
+client = genai.Client(api_key=api_key) if api_key else None
 
 
 def evaluate_answer(question, correct_answer, student_answer, lesson):
@@ -55,6 +50,15 @@ Rules:
 """
 
     try:
+        if not client:
+            return {
+                "result": "ERROR",
+                "score": 0,
+                "explanation": "AI service unavailable (credentials missing).",
+                "misconception": "",
+                "recommended_action": "CONTINUE"
+            }
+
         response = client.models.generate_content(
             model="gemini-1.5-flash",
             contents=prompt,
