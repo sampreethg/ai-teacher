@@ -59,6 +59,7 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
   const [isMuted, setIsMuted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [speakingText, setSpeakingText] = useState<string | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sessionRef = useRef<any>(null);
@@ -139,14 +140,17 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
       return true;
     } catch (err: any) {
       console.warn('[LiveAvatar] WebRTC session start failed or credentials pending:', err);
-      updateStatus('error');
-      setErrorMessage(err.message || 'Could not connect to Live Avatar stream');
+      // Fallback to unified Simulation Mode
+      setIsSimulating(true);
+      updateStatus('connected');
+      setErrorMessage(err.message || 'Could not connect to Live Avatar stream. Falling back to Simulation Mode.');
       return false;
     }
   };
 
   const stopSession = async () => {
     try {
+      setIsSimulating(false);
       if (sessionRef.current) {
         await sessionRef.current.stop();
         sessionRef.current = null;
@@ -163,18 +167,19 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
     if (!text?.trim()) return;
     setSpeakingText(text);
 
-    if (sessionRef.current && (status === 'connected' || status === 'speaking')) {
+    if (!isSimulating && sessionRef.current && (status === 'connected' || status === 'speaking')) {
       try {
         sessionRef.current.message(text);
       } catch (err) {
         console.error('[LiveAvatar] Error sending speech to avatar:', err);
       }
     } else {
-      // Fallback: simulate speech timing for visual presentation
+      // Unified simulation management
+      setIsSimulating(true);
       updateStatus('speaking');
       const durationMs = Math.min(Math.max(text.length * 60, 3000), 10000);
       setTimeout(() => {
-        updateStatus(sessionRef.current ? 'connected' : 'idle');
+        updateStatus('connected');
         setSpeakingText(null);
       }, durationMs);
     }
@@ -246,7 +251,9 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
         <div className="flex items-center gap-2">
           <div
             className={`w-2.5 h-2.5 rounded-full ${
-              status === 'connected'
+              isSimulating
+                ? 'bg-purple-400 animate-pulse'
+                : status === 'connected'
                 ? 'bg-emerald-400 animate-pulse'
                 : status === 'speaking'
                 ? 'bg-cyan-400 animate-ping'
@@ -337,7 +344,16 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
       </div>
 
       {/* Error notice if credentials missing */}
-      {status === 'error' && errorMessage && (
+      {isSimulating && errorMessage && (
+        <div className="mb-2 p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/30 text-[11px] text-purple-300 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <span className="font-bold">Simulation Mode: </span>
+            <span>{errorMessage}</span>
+          </div>
+        </div>
+      )}
+      {status === 'error' && !isSimulating && errorMessage && (
         <div className="mb-2 p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="flex-1">
@@ -352,7 +368,7 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
         <div className="flex items-center gap-1.5 text-cyan-400 font-semibold">
           <Radio className="w-3.5 h-3.5" />
           <span className="capitalize">{status === 'speaking' ? 'Speaking...' : status}</span>
-          {status === 'connected' && <span className="text-[10px] text-slate-400 font-normal">&bull; WebRTC 38ms</span>}
+          {status === 'connected' && <span className="text-[10px] text-slate-400 font-normal">&bull; {isSimulating ? 'Simulation Mode' : 'WebRTC 38ms'}</span>}
         </div>
 
         {/* Start / Stop Stream Action */}
