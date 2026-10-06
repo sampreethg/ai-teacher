@@ -2,11 +2,21 @@ import os
 import json
 from dotenv import load_dotenv
 from google import genai
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key) if api_key else None
+
+class QuestionModel(BaseModel):
+    question: str
+    options: dict[str, str]
+    correct_answer: str = Field(pattern="^[A-D]$")
+    explanation: str
+
+class QuestionListModel(BaseModel):
+    questions: list[QuestionModel]
 
 
 def generate_questions(
@@ -64,12 +74,23 @@ Rules:
             model="gemini-1.5-flash",
             contents=prompt,
             config={
-                "response_mime_type": "application/json"
+                "response_mime_type": "application/json",
+                "response_schema": QuestionListModel
             }
         )
-        return json.loads(response.text)
+        
+        # Parse and validate with Pydantic
+        raw_data = json.loads(response.text)
+        validated = QuestionListModel.model_validate(raw_data)
+        
+        # Ensure correct_answer is actually a valid option key
+        for q in validated.questions:
+            if q.correct_answer not in q.options:
+                raise ValueError(f"Correct answer '{q.correct_answer}' not in options.")
+                
+        return validated.model_dump()
     except Exception as e:
-        print(f"[generate_questions warning] API error: {e}")
+        print(f"[generate_questions warning] API/Validation error: {e}")
         return {"error": "An internal error occurred while generating questions.", "questions": []}
 
 

@@ -2,12 +2,20 @@ import os
 import json
 from dotenv import load_dotenv
 from google import genai
+from pydantic import BaseModel, Field
 
 # Load environment variables
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key) if api_key else None
+
+class EvaluationModel(BaseModel):
+    result: str = Field(pattern="^(CORRECT|INCORRECT)$")
+    score: int = Field(ge=0, le=100)
+    explanation: str
+    misconception: str
+    recommended_action: str = Field(pattern="^(CONTINUE|PRACTICE|RETEACH|SIMPLIFY|INCREASE_DIFFICULTY)$")
 
 
 def evaluate_answer(question, correct_answer, student_answer, lesson):
@@ -63,15 +71,17 @@ Rules:
             model="gemini-1.5-flash",
             contents=prompt,
             config={
-                "response_mime_type": "application/json"
+                "response_mime_type": "application/json",
+                "response_schema": EvaluationModel
             }
         )
 
-        # Convert Gemini's JSON text into a Python dictionary
-        evaluation = json.loads(response.text)
-        return evaluation
+        # Parse and validate with Pydantic
+        raw_data = json.loads(response.text)
+        validated = EvaluationModel.model_validate(raw_data)
+        return validated.model_dump()
     except Exception as e:
-        print(f"[evaluate_answer warning] Gemini API error: {e}")
+        print(f"[evaluate_answer warning] API/Validation error: {e}")
         return {
             "result": "ERROR",
             "score": 0,
