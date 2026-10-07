@@ -52,11 +52,16 @@ const limiter = rateLimit({
 app.use(limiter);
 app.use(express.json({ limit: "2mb" })); // Reduced limit for safety
 
-// Authentication Middleware - Requires valid authenticated session or authorized credential
-const authSecret =
-  process.env.NEXTAUTH_SECRET ||
-  process.env.AUTH_SECRET ||
-  "hackathon-super-secret-key-change-in-prod";
+const authSecret = process.env.NEXTAUTH_SECRET;
+
+if (!authSecret) {
+  console.error(
+    "CRITICAL CONFIGURATION ERROR: NEXTAUTH_SECRET is required but missing from environment variables."
+  );
+  throw new Error(
+    "NEXTAUTH_SECRET environment variable is missing. The avatar backend requires NEXTAUTH_SECRET to validate authenticated sessions."
+  );
+}
 
 // Internal service key (optional additional service-to-service handshake)
 const internalSecret = process.env.AVATAR_INTERNAL_SECRET || process.env.INTERNAL_API_KEY;

@@ -692,6 +692,23 @@
 - **Verification:**
     - Live tests confirmed unauthenticated requests return `401 Unauthorized`.
     - Authenticated requests pass verification.
-    - TypeScript compile check passed with 0 errors.
+    - TypeScript compile check passed with 0 errors.---
 
-
+### Entry 031 - Strict NEXTAUTH_SECRET Environment Enforcement
+- **Timestamp:** 2026-10-07
+- **Action:** Removed all hardcoded fallbacks for `NEXTAUTH_SECRET`, required it strictly from environment variables, and made the application fail fast and clearly if it is missing across all services.
+- **Files Modified:**
+  - `app/api/auth/[...nextauth]/route.ts`:
+    - Removed `'hackathon-ai-teacher-secret-key-12345'` fallback.
+    - Throws fatal error on startup if `process.env.NEXTAUTH_SECRET` is missing.
+  - `ai-teacher-avatar/backend/server.js`:
+    - Removed hardcoded fallback `'hackathon-super-secret-key-change-in-prod'`.
+    - Logs critical error and throws fatal `Error` preventing server startup if `NEXTAUTH_SECRET` is missing.
+  - `app/api/avatar/route.ts`:
+    - Removed hardcoded fallback secret; logs critical error and returns HTTP 500 configuration error if `NEXTAUTH_SECRET` is missing.
+  - `app/api/upload/route.ts`:
+    - Removed hardcoded fallback secret; logs critical error and returns HTTP 500 error if `NEXTAUTH_SECRET` is missing.
+- **Verification:**
+  - Verified backend crashes with exit code 1 and descriptive error when `NEXTAUTH_SECRET` is not set.
+  - Verified backend starts up cleanly when `NEXTAUTH_SECRET` is present.
+  - TypeScript validation passed with 0 errors (`npx tsc --noEmit`).

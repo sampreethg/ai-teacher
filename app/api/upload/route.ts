@@ -12,7 +12,16 @@ const ALLOWED_EXTENSIONS = ['.pdf', '.txt', '.md'];
 export async function POST(request: NextRequest) {
   try {
     // 1. Authentication
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || 'hackathon-ai-teacher-secret-key-12345' });
+    const secret = process.env.NEXTAUTH_SECRET;
+    if (!secret) {
+      console.error('[API /api/upload] CRITICAL: NEXTAUTH_SECRET is missing in environment variables.');
+      return NextResponse.json(
+        { success: false, error: 'Server misconfiguration: NEXTAUTH_SECRET environment variable is required.' },
+        { status: 500 }
+      );
+    }
+
+    const token = await getToken({ req: request, secret });
     if (!token) {
       return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 401 });
     }

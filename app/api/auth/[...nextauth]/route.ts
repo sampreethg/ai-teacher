@@ -3,6 +3,13 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
+const nextAuthSecret = process.env.NEXTAUTH_SECRET;
+if (!nextAuthSecret) {
+  throw new Error(
+    '[NextAuth] CRITICAL: NEXTAUTH_SECRET environment variable is missing. A secure random secret is required to run the authentication service.'
+  );
+}
+
 const handler = NextAuth({
   providers: [
     CredentialsProvider({
@@ -63,7 +70,7 @@ const handler = NextAuth({
   pages: {
     signIn: '/login', // Adjust this if you have a custom login page
   },
-  secret: process.env.NEXTAUTH_SECRET || 'hackathon-ai-teacher-secret-key-12345',
+  secret: nextAuthSecret,
 });
 
 export { handler as GET, handler as POST };

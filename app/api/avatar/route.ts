@@ -4,10 +4,14 @@ import { getToken } from 'next-auth/jwt';
 export async function POST(request: NextRequest) {
   try {
     // 1. Enforce authenticated session
-    const secret =
-      process.env.NEXTAUTH_SECRET ||
-      process.env.AUTH_SECRET ||
-      'hackathon-super-secret-key-change-in-prod';
+    const secret = process.env.NEXTAUTH_SECRET;
+    if (!secret) {
+      console.error('[API /api/avatar] CRITICAL: NEXTAUTH_SECRET environment variable is missing.');
+      return NextResponse.json(
+        { error: 'Configuration Error', message: 'NEXTAUTH_SECRET environment variable is missing.' },
+        { status: 500 }
+      );
+    }
 
     const token = await getToken({ req: request, secret });
     if (!token) {
