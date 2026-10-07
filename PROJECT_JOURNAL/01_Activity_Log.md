@@ -669,3 +669,29 @@
 - **Verification:**
   - Verified data flow from UI -> sessionStorage -> Next.js fetch -> FastAPI LessonRequest -> Gemini Generator -> HeyGen Avatar Speak.
 
+---
+
+### Entry 030 - Avatar Backend Authentication Hardening & 401 Enforcement
+- **Timestamp:** 2026-10-07
+- **Action:** Enforced authenticated session requirements on the LiveAvatar backend before creating an avatar session, removed commented-out 401 protections, kept rate limiting, and maintained LiveAvatar API keys strictly on the server side.
+- **Files Modified:**
+  - `ai-teacher-avatar/backend/server.js`:
+    - Replaced inert commented-out `checkAuth` middleware with strict JWT/cookie session validation.
+    - Added verification for NextAuth JWT bearer tokens and standard `next-auth.session-token` cookies with expiration checks.
+    - Returns `HTTP 401 Unauthorized` for unauthenticated or expired requests.
+    - Preserved `express-rate-limit` (100 requests / 15 minutes window) and kept `LIVEAVATAR_API_KEY` server-side only.
+  - `ai-teacher-avatar/backend/.env` & `ai-teacher-avatar/backend/.env.example`:
+    - Synchronized `NEXTAUTH_SECRET` for cross-service session verification.
+  - `app/api/avatar/route.ts`:
+    - Enforced NextAuth session validation (`getToken`) before proxying avatar session creation requests.
+    - Forwards session cookies and authorization headers to the Express backend.
+  - `middleware.ts`:
+    - Added `/api/avatar/:path*` to Next.js middleware protected route matchers.
+  - `components/studio/LiveAvatar.tsx` & `hooks/useAITeacher.ts`:
+    - Added `credentials: 'include'` to pass session cookies to backend and added graceful fallback to `/api/avatar`.
+- **Verification:**
+    - Live tests confirmed unauthenticated requests return `401 Unauthorized`.
+    - Authenticated requests pass verification.
+    - TypeScript compile check passed with 0 errors.
+
+

@@ -39,18 +39,35 @@ export function useAITeacher(options: UseAITeacherOptions = {}) {
     const activeLang = customLang || language;
 
     try {
-      const response = await fetch(`${avatarBackendUrl}/api/avatar/session`, {
+      let response = await fetch(`${avatarBackendUrl}/api/avatar/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           voice_id: activeVoice,
           language: activeLang,
         }),
-      });
+      }).catch(() => null);
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || `Session initialization failed: ${response.status}`);
+      if (!response || !response.ok) {
+        const fallbackRes = await fetch('/api/avatar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            voice_id: activeVoice,
+            language: activeLang,
+          }),
+        }).catch(() => null);
+
+        if (fallbackRes && fallbackRes.ok) {
+          response = fallbackRes;
+        }
+      }
+
+      if (!response || !response.ok) {
+        const err = response ? await response.json().catch(() => ({})) : {};
+        throw new Error(err.message || `Session initialization failed: ${response?.status || 'network error'}`);
       }
 
       const sessionData = await response.json();

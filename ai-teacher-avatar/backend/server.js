@@ -52,15 +52,75 @@ const limiter = rateLimit({
 app.use(limiter);
 app.use(express.json({ limit: "2mb" })); // Reduced limit for safety
 
-// Basic Auth Middleware (Optional API Key Check)
-const checkAuth = (req, res, next) => {
-  // If the frontend sets an Authorization header or we rely on session
-  const authHeader = req.headers['authorization'] || req.headers['x-api-key'];
-  if (process.env.NODE_ENV === 'production' && !authHeader) {
-    // Basic protection for production
-    // return res.status(401).json({ error: 'Unauthorized' });
+// Authentication Middleware - Requires valid authenticated session or authorized credential
+const authSecret =
+  process.env.NEXTAUTH_SECRET ||
+  process.env.AUTH_SECRET ||
+  "hackathon-super-secret-key-change-in-prod";
+
+// Internal service key (optional additional service-to-service handshake)
+const internalSecret = process.env.AVATAR_INTERNAL_SECRET || process.env.INTERNAL_API_KEY;
+
+const checkAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'] || req.headers['x-api-key'];
+
+    // Check service-to-service key if configured
+    if (internalSecret && authHeader) {
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader;
+      if (token === internalSecret) {
+        return next();
+      }
+    }
+
+    // Check NextAuth JWT bearer token
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const rawToken = authHeader.slice(7).trim();
+      const { decode } = await import('next-auth/jwt');
+      try {
+        const decoded = await decode({ token: rawToken, secret: authSecret });
+        if (decoded && (!decoded.exp || decoded.exp > Math.floor(Date.now() / 1000))) {
+          req.user = decoded;
+          return next();
+        }
+      } catch (err) {
+        // Token decode failed
+      }
+    }
+
+    // Check cookies (standard NextAuth session cookie: next-auth.session-token or __Secure-next-auth.session-token)
+    if (req.headers.cookie) {
+      const { default: cookie } = await import('cookie');
+      const cookies = cookie.parse(req.headers.cookie);
+      const sessionToken =
+        cookies['next-auth.session-token'] ||
+        cookies['__Secure-next-auth.session-token'];
+
+      if (sessionToken) {
+        const { decode } = await import('next-auth/jwt');
+        try {
+          const decoded = await decode({ token: sessionToken, secret: authSecret });
+          if (decoded && (!decoded.exp || decoded.exp > Math.floor(Date.now() / 1000))) {
+            req.user = decoded;
+            return next();
+          }
+        } catch (err) {
+          // Cookie token decode failed
+        }
+      }
+    }
+
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Valid authenticated session is required before creating an avatar session.'
+    });
+  } catch (error) {
+    console.error('[checkAuth] Error verifying authentication session:', error);
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Authentication session validation failed.'
+    });
   }
-  next();
 };
 
 app.use('/api/avatar', checkAuth);

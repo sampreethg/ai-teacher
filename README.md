@@ -3,7 +3,9 @@
 **AI Teacher** is a full-stack, AI-driven educational platform designed to transform learning into an interactive, personalized experience. Featuring a real-time **interactive AI Avatar teacher**, document-based **RAG (Retrieval-Augmented Generation)** context ingestion, custom lesson plan generation, and intelligent quiz evaluation powered by **Google Gemini**.
 
 ---
+
 Live link: https://ai-teacher-hackathon.vercel.app/
+
 ## ✨ Features
 
 - 🤖 **Interactive AI Avatar Teacher**: Engaging real-time visual teacher powered by HeyGen / LiveAvatar SDK.

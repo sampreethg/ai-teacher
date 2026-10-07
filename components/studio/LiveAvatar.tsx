@@ -74,23 +74,41 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
       setErrorMessage(null);
       updateStatus('connecting');
 
-      // 1. Fetch token from Express Avatar Backend (Port 3001)
+      // 1. Fetch token from Express Avatar Backend (Port 3001) or Next.js /api/avatar route
       const tokenEndpoint = `${avatarBackendUrl}/api/avatar/session`;
-      const tokenRes = await fetch(tokenEndpoint, {
+      let tokenRes = await fetch(tokenEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           voice_id: voiceId,
           language: language,
         })
-      });
+      }).catch(() => null);
 
-      if (!tokenRes.ok) {
-        const errorData = await tokenRes.json().catch(() => ({}));
+      // Fallback to Next.js proxy /api/avatar if direct backend fails or returns 401/404
+      if (!tokenRes || !tokenRes.ok) {
+        const fallbackRes = await fetch('/api/avatar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            voice_id: voiceId,
+            language: language,
+          })
+        }).catch(() => null);
+
+        if (fallbackRes && fallbackRes.ok) {
+          tokenRes = fallbackRes;
+        }
+      }
+
+      if (!tokenRes || !tokenRes.ok) {
+        const errorData = tokenRes ? await tokenRes.json().catch(() => ({})) : {};
         throw new Error(
           errorData.message ||
           errorData.error ||
-          `Backend returned status ${tokenRes.status}. Make sure HEYGEN_API_KEY is configured in ai-teacher-avatar/backend/.env`
+          `Avatar session request failed${tokenRes ? ` with status ${tokenRes.status}` : ''}. Please ensure you are logged in and avatar credentials are configured.`
         );
       }
 

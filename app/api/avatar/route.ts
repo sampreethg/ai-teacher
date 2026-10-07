@@ -1,14 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 
 export async function POST(request: NextRequest) {
   try {
+    // 1. Enforce authenticated session
+    const secret =
+      process.env.NEXTAUTH_SECRET ||
+      process.env.AUTH_SECRET ||
+      'hackathon-super-secret-key-change-in-prod';
+
+    const token = await getToken({ req: request, secret });
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Unauthorized', message: 'Valid authenticated session is required to create an avatar session.' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const avatarBackendUrl = process.env.AVATAR_BACKEND_URL || 'http://localhost:3001';
+
+    // Forward cookies and auth headers to backend
+    const cookieHeader = request.headers.get('cookie') || '';
+    const authHeader = request.headers.get('authorization') || '';
 
     const response = await fetch(`${avatarBackendUrl}/api/avatar/session`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+        ...(authHeader ? { Authorization: authHeader } : {}),
       },
       body: JSON.stringify(body),
     });
