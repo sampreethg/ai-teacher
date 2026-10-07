@@ -360,11 +360,12 @@ function StudioContent() {
 
           {/* Open AI Classroom CTA Pill */}
           <Link
+            id="join-class-studio-btn"
             href="/classroom"
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm hover:shadow transition-all"
           >
             <Video className="w-3.5 h-3.5" />
-            <span>Open AI Classroom</span>
+            <span>Join Class</span>
           </Link>
 
           {/* Global Persistent ThemeToggle */}

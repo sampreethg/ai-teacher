@@ -114,11 +114,16 @@ Student Question: {request.message}
 
 Provide a clear, pedagogical, structured explanation with Markdown formatting, bullet points, and key derivations grounded in educational materials.
 """
-            response = client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=prompt
-            )
-            return {"response": response.text}
+            for model_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite"]:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt
+                    )
+                    return {"response": response.text}
+                except Exception as model_err:
+                    print(f"[chat_endpoint] Model {model_name} failed: {model_err}")
+            return {"response": "Service temporarily busy. Please try again."}
         else:
             return {"response": "API key not configured."}
     except Exception as e:
@@ -163,17 +168,21 @@ Respond in the exact Target Language ({language}).
 Respond directly to the student in a supportive, crystal-clear, conversational manner (around 2-3 concise sentences) suitable for text-to-speech avatar delivery.
 Clarify the doubt directly and transition encouragingly back to the lesson.
 """
-            response = client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=prompt
-            )
-            explanation = response.text.strip()
-            return {
-                "status": "success",
-                "question": query,
-                "explanation": explanation,
-                "response": explanation
-            }
+            for model_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite"]:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt
+                    )
+                    explanation = response.text.strip()
+                    return {
+                        "status": "success",
+                        "question": query,
+                        "explanation": explanation,
+                        "response": explanation
+                    }
+                except Exception as model_err:
+                    print(f"[ask_doubt] Model {model_name} failed: {model_err}")
     except Exception as err:
         print(f"[ask_doubt] AI generation error: {err}")
 
@@ -263,6 +272,7 @@ def adapt_student(request: AdaptRequest):
     )
 
     return result
+
 # =========================
 # COMPLETE ADAPTIVE TEACHING
 # =========================
@@ -293,17 +303,39 @@ def adaptive_teaching(request: TeachingRequest):
         )
 
         # ==================================
+        # EVALUATION ERROR PROTECTION
+        # ==================================
+        if evaluation.get("result") == "EVALUATION_ERROR" or evaluation.get("score") is None:
+            return {
+                "status": "evaluation_error",
+                "evaluation": {
+                    "result": "EVALUATION_ERROR",
+                    "score": None,
+                    "explanation": evaluation.get("explanation", "There was an error evaluating your answer. Please try again."),
+                    "misconception": "",
+                    "recommended_action": "RETRY"
+                },
+                "adaptive_decision": {
+                    "action": "RETRY",
+                    "message": "Evaluation failed. Difficulty and mastery were preserved.",
+                    "difficulty": None
+                },
+                "reteach_content": "",
+                "next_question": None
+            }
+
+        # ==================================
         # STEP 2: DETECT ADAPTIVE ACTION
         # ==================================
 
         adaptive_result = decide_next_action(
             score=evaluation["score"],
             result=evaluation["result"],
-            misconception=evaluation["misconception"]
+            misconception=evaluation.get("misconception", "")
         )
 
         action = adaptive_result["action"]
-        next_difficulty = adaptive_result["difficulty"]
+        next_difficulty = adaptive_result["difficulty"] or "Easy"
 
         # ==================================
         # STEP 3: RE-TEACH IF NEEDED
@@ -322,15 +354,19 @@ def adaptive_teaching(request: TeachingRequest):
         # STEP 4: GENERATE NEXT QUESTION
         # ==================================
 
-        next_questions = generate_questions(
-            topic=request.topic,
-            lesson=request.lesson,
-            level=request.level,
-            difficulty=next_difficulty,
-            number_of_questions=1
-        )
-
-        next_question = next_questions["questions"][0]
+        next_question = None
+        try:
+            next_questions = generate_questions(
+                topic=request.topic,
+                lesson=request.lesson,
+                level=request.level,
+                difficulty=next_difficulty,
+                number_of_questions=1
+            )
+            if next_questions.get("questions") and len(next_questions["questions"]) > 0:
+                next_question = next_questions["questions"][0]
+        except Exception as q_err:
+            print(f"[adaptive_teaching] Next question generation skipped: {q_err}")
 
         # ==================================
         # STEP 5: RETURN ADAPTIVE RESPONSE
@@ -343,8 +379,8 @@ def adaptive_teaching(request: TeachingRequest):
                 "result": evaluation["result"],
                 "score": evaluation["score"],
                 "explanation": evaluation["explanation"],
-                "misconception": evaluation["misconception"],
-                "recommended_action": evaluation["recommended_action"]
+                "misconception": evaluation.get("misconception", ""),
+                "recommended_action": evaluation.get("recommended_action", "CONTINUE")
             },
 
             "adaptive_decision": {

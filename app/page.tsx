@@ -227,13 +227,14 @@ export default function LandingPage() {
           {/* Centered One-Time Tier CTA Button Section */}
           <div id="demo" className="pt-6 pb-2 flex flex-col items-center justify-center text-center scroll-mt-28">
             <Link
+              id="join-class-button"
               href="/classroom?demo=true"
               className="group relative inline-flex items-center justify-center gap-3.5 px-8 py-4 sm:px-10 sm:py-5 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 text-white font-bold text-base sm:text-lg shadow-xl shadow-cyan-500/25 glow-btn hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer"
             >
               <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Play className="w-4 h-4 fill-white text-white ml-0.5" />
               </div>
-              <span className="tracking-tight">Try Instant Demo (One-Time Tier)</span>
+              <span className="tracking-tight">Join Class &bull; Instant Demo</span>
               <ArrowRight className="w-5 h-5 text-cyan-200 group-hover:translate-x-1 transition-transform" />
             </Link>
 

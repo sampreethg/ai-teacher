@@ -50,18 +50,26 @@ Make the explanation clear, engaging and easy to understand.
 Return the lesson in a well-structured Markdown format.
 """
 
-    try:
-        if not client:
-            return "# Configuration Error\n\nAI service unavailable (credentials missing). Please configure GEMINI_API_KEY."
+    if not api_key:
+        return "# Configuration Error\n\nAI service unavailable (credentials missing). Please configure GEMINI_API_KEY."
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
-        return response.text
-    except Exception as e:
-        print(f"[generate_lesson warning] Gemini API error: {e}")
-        return f"# Error generating lesson\n\nThere was an error generating the lesson for {topic}. Please try again later."
+    models_to_try = ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+    last_error = None
+
+    for model_name in models_to_try:
+        try:
+            active_client = client or genai.Client(api_key=api_key)
+            response = active_client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            if response.text and len(response.text.strip()) > 0:
+                return response.text
+        except Exception as e:
+            last_error = e
+            print(f"[generate_lesson warning] Model {model_name} failed: {e}")
+
+    return f"# Error generating lesson\n\nThere was an error generating the lesson for {topic}: {str(last_error or 'Service unavailable')}. Please try again."
 
 
 if __name__ == "__main__":

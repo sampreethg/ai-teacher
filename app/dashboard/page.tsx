@@ -342,11 +342,12 @@ export default function DashboardLessonsPage() {
                         <span>Open Studio</span>
                       </button>
                       <button
+                        id="dashboard-join-class-btn"
                         onClick={() => router.push('/classroom')}
                         className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
                       >
                         <ExternalLink className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>Video Lesson</span>
+                        <span>Join Class</span>
                       </button>
                       <button
                         onClick={(e) => handleDeleteLesson(lesson.id, e)}

@@ -2,36 +2,56 @@ def decide_next_action(score, result, misconception=""):
     """
     Decide how the AI teacher should continue teaching
     based on the student's performance.
+    Guarantees that evaluation errors never alter student difficulty or mastery.
     """
+    if not result:
+        result = "EVALUATION_ERROR"
 
-    result = result.upper()
+    norm_result = str(result).upper().strip()
 
-    # Student understands the concept
-    if result == "CORRECT" and score >= 80:
+    # CRITICAL PROTECTION: Do not update difficulty or mastery on evaluation failures
+    if norm_result in ["EVALUATION_ERROR", "ERROR"] or score is None:
         return {
-            "action": "INCREASE_DIFFICULTY",
-            "message": "The student understands the concept. Move to a harder question.",
-            "difficulty": "Hard"
+            "action": "RETRY",
+            "message": "Evaluation could not be completed. Student mastery and difficulty remain unchanged.",
+            "difficulty": None,
+            "misconception": ""
         }
 
-    # Student partially understands
-    elif result == "CORRECT" and score >= 60:
+    # Student understands the concept
+    if norm_result == "CORRECT":
+        numeric_score = int(score) if score is not None else 80
+        if numeric_score >= 80:
+            return {
+                "action": "INCREASE_DIFFICULTY",
+                "message": "The student understands the concept. Move to a harder question.",
+                "difficulty": "Hard"
+            }
+        else:
+            return {
+                "action": "PRACTICE",
+                "message": "The student has basic understanding. Give another practice question.",
+                "difficulty": "Medium"
+            }
+
+    # Partial understanding
+    elif norm_result == "PARTIAL":
         return {
             "action": "PRACTICE",
-            "message": "The student has basic understanding. Give another practice question.",
+            "message": "The student demonstrates partial understanding. Provide targeted practice.",
             "difficulty": "Medium"
         }
 
-    # Student is struggling
-    elif result == "INCORRECT":
+    # Student has misconception / incorrect answer
+    elif norm_result == "INCORRECT":
         return {
             "action": "RETEACH",
             "message": "The student has a misconception. Explain the concept again using a simpler example.",
             "difficulty": "Easy",
-            "misconception": misconception
+            "misconception": misconception or ""
         }
 
-    # Default
+    # Fallback for unrecognized valid status
     else:
         return {
             "action": "SIMPLIFY",

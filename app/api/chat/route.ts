@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     });
 
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: formattedContents,
       config: {
         systemInstruction: 'You are an AI Teacher and Research Assistant in an interactive educational learning studio. Provide clear, structured, pedagogical explanations with Markdown formatting, bullet points, and key derivations grounded in educational materials.'

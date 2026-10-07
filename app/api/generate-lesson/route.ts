@@ -44,7 +44,7 @@ ${pdfText || 'Teach the core principles and derivations of the specified topic.'
 `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
