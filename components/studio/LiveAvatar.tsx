@@ -81,7 +81,7 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0); // 0 to 100%
   const [currentTime, setCurrentTime] = useState(0); // seconds
-  const [videoDuration, setVideoDuration] = useState(25); // default 25 seconds for dynamic lesson video
+  const [videoDuration, setVideoDuration] = useState(25); // dynamic lesson duration
   const [hasCompleted, setHasCompleted] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -92,6 +92,14 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
   const progressTimerRef = useRef<any>(null);
   const speechUttRef = useRef<any>(null);
 
+  // Active playback state refs to prevent background timer progress or premature completion
+  const isPlayingRef = useRef<boolean>(false);
+  const accumulatedTimeRef = useRef<number>(0);
+  const lastTickRef = useRef<number>(0);
+  const hasCompletedRef = useRef<boolean>(false);
+  const speechActiveRef = useRef<boolean>(false);
+  const speechCompletedRef = useRef<boolean>(false);
+
   const updateStatus = useCallback((newStatus: AvatarStatus) => {
     setStatus(newStatus);
     onStatusChange?.(newStatus);
@@ -99,6 +107,8 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
 
   // Clean up canvas animation & media streams
   const cleanupVideoStream = useCallback(() => {
+    isPlayingRef.current = false;
+    lastTickRef.current = 0;
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
@@ -123,6 +133,21 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Trigger actual video / lesson completion ONLY when playback actually reaches the end
+  const triggerActualCompletion = useCallback(() => {
+    if (hasCompletedRef.current) return;
+    hasCompletedRef.current = true;
+    isPlayingRef.current = false;
+    setHasCompleted(true);
+    setIsPlaying(false);
+    setVideoProgress(100);
+    setCurrentTime(videoDuration);
+    cleanupVideoStream();
+    onVideoProgress?.(100, videoDuration, videoDuration);
+    onVideoCompleted?.();
+    onPlayStateChange?.(false);
+  }, [videoDuration, cleanupVideoStream, onVideoProgress, onVideoCompleted, onPlayStateChange]);
+
   // Generate an interactive HTML5 Canvas teaching video stream if WebRTC is not active
   const startInteractiveTeachingCanvas = useCallback((lessonText: string, targetDuration: number = 25) => {
     if (typeof window === 'undefined') return;
@@ -139,15 +164,28 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
 
     let frameCount = 0;
     let mouthOpen = 0;
-    const startTime = Date.now();
-    const durationMs = targetDuration * 1000;
+    lastTickRef.current = performance.now();
+    isPlayingRef.current = true;
 
-    // Canvas drawing loop
+    // Canvas drawing loop with real active-tick accumulation
     const renderFrame = () => {
+      if (!isPlayingRef.current) return;
+
       frameCount++;
-      const elapsedMs = Date.now() - startTime;
-      const progressRatio = Math.min(elapsedMs / durationMs, 1);
-      const curSec = Math.min(elapsedMs / 1000, targetDuration);
+      const now = performance.now();
+      if (lastTickRef.current > 0) {
+        const deltaSec = (now - lastTickRef.current) / 1000;
+        accumulatedTimeRef.current = Math.min(accumulatedTimeRef.current + deltaSec, targetDuration);
+      }
+      lastTickRef.current = now;
+
+      const curSec = accumulatedTimeRef.current;
+      const progressRatio = targetDuration > 0 ? Math.min(curSec / targetDuration, 1) : 0;
+      const progressPercent = Math.min(Math.round(progressRatio * 100), 100);
+
+      setCurrentTime(curSec);
+      setVideoProgress(progressPercent);
+      onVideoProgress?.(progressPercent, curSec, targetDuration);
 
       // 1. Background gradient
       const bgGrad = ctx.createLinearGradient(0, 0, 640, 360);
@@ -281,21 +319,16 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
       ctx.font = 'bold 10px Inter, sans-serif';
       ctx.fillText('REC • AI LECTURE STREAM', 45, 32);
 
-      if (progressRatio < 1) {
+      const speechFinished = !speechActiveRef.current || speechCompletedRef.current;
+      if (progressRatio < 1 || !speechFinished) {
         animFrameRef.current = requestAnimationFrame(renderFrame);
       } else {
-        // Video finished rendering
-        setHasCompleted(true);
-        setIsPlaying(false);
-        setVideoProgress(100);
-        setCurrentTime(targetDuration);
-        onVideoProgress?.(100, targetDuration, targetDuration);
-        onVideoCompleted?.();
-        onPlayStateChange?.(false);
+        // ACTUAL VIDEO/LESSON FINISHED: Trigger actual completion
+        triggerActualCompletion();
       }
     };
 
-    renderFrame();
+    animFrameRef.current = requestAnimationFrame(renderFrame);
 
     // Capture media stream and attach to video element
     try {
@@ -317,26 +350,25 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
         const utt = new SpeechSynthesisUtterance(speechText);
         utt.rate = 1.0;
         speechUttRef.current = utt;
+        speechActiveRef.current = true;
+        speechCompletedRef.current = false;
+        utt.onend = () => {
+          speechCompletedRef.current = true;
+        };
+        utt.onerror = () => {
+          speechCompletedRef.current = true;
+        };
         window.speechSynthesis.speak(utt);
       } catch (e) {
         console.warn('SpeechSynthesis error:', e);
+        speechActiveRef.current = false;
+        speechCompletedRef.current = true;
       }
+    } else {
+      speechActiveRef.current = false;
+      speechCompletedRef.current = true;
     }
-
-    // Track active progress updates every 250ms
-    progressTimerRef.current = setInterval(() => {
-      const elapsedSec = (Date.now() - startTime) / 1000;
-      const progress = Math.min(Math.round((elapsedSec / targetDuration) * 100), 100);
-      setCurrentTime(Math.min(elapsedSec, targetDuration));
-      setVideoProgress(progress);
-      onVideoProgress?.(progress, Math.min(elapsedSec, targetDuration), targetDuration);
-
-      if (elapsedSec >= targetDuration) {
-        clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
-      }
-    }, 250);
-  }, [educatorName, isMuted, onVideoProgress, onVideoCompleted, onPlayStateChange, cleanupVideoStream]);
+  }, [educatorName, isMuted, triggerActualCompletion, cleanupVideoStream]);
 
   const startSession = async (): Promise<boolean> => {
     try {
@@ -409,10 +441,8 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
           session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
             updateStatus('connected');
             setSpeakingText(null);
-            // Detect speech lecture completion
-            setHasCompleted(true);
-            setVideoProgress(100);
-            onVideoCompleted?.();
+            // NOTE: Avatar finishing an individual sentence does NOT mark the lesson complete.
+            // Lesson completion is strictly determined by the full lecture track reaching the end.
           });
 
           session.on(SessionEvent.SESSION_DISCONNECTED, () => {
@@ -427,6 +457,7 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
 
           updateStatus('connected');
           setIsPlaying(true);
+          isPlayingRef.current = true;
           onPlayStateChange?.(true);
           return true;
         }
@@ -436,6 +467,7 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
       setIsSimulating(true);
       updateStatus('connected');
       setIsPlaying(true);
+      isPlayingRef.current = true;
       onPlayStateChange?.(true);
       startInteractiveTeachingCanvas(teachingLesson, videoDuration);
       return true;
@@ -444,6 +476,7 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
       setIsSimulating(true);
       updateStatus('connected');
       setIsPlaying(true);
+      isPlayingRef.current = true;
       onPlayStateChange?.(true);
       startInteractiveTeachingCanvas(teachingLesson, videoDuration);
       return true;
@@ -454,6 +487,7 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
     try {
       cleanupVideoStream();
       setIsPlaying(false);
+      isPlayingRef.current = false;
       onPlayStateChange?.(false);
       if (sessionRef.current) {
         await sessionRef.current.stop();
@@ -468,16 +502,24 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
   };
 
   const playVideo = async () => {
-    if (!isPlaying) {
+    if (hasCompletedRef.current) return;
+    if (!isPlayingRef.current) {
       if (status === 'idle') {
         await startSession();
       } else {
+        isPlayingRef.current = true;
         setIsPlaying(true);
         onPlayStateChange?.(true);
+        lastTickRef.current = performance.now();
         if (videoRef.current) {
           await videoRef.current.play().catch(() => {});
         }
-        if (isSimulating) {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        }
+        if (isSimulating && !animFrameRef.current) {
           startInteractiveTeachingCanvas(teachingLesson, videoDuration);
         }
       }
@@ -485,14 +527,16 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
   };
 
   const pauseVideo = () => {
+    isPlayingRef.current = false;
     setIsPlaying(false);
     onPlayStateChange?.(false);
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    lastTickRef.current = 0;
     if (videoRef.current) {
       videoRef.current.pause();
-    }
-    if (progressTimerRef.current) {
-      clearInterval(progressTimerRef.current);
-      progressTimerRef.current = null;
     }
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.pause();
@@ -501,10 +545,15 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
 
   const handleRestartVideo = () => {
     cleanupVideoStream();
+    hasCompletedRef.current = false;
     setHasCompleted(false);
+    accumulatedTimeRef.current = 0;
+    lastTickRef.current = 0;
+    speechCompletedRef.current = false;
     setCurrentTime(0);
     setVideoProgress(0);
     setIsPlaying(true);
+    isPlayingRef.current = true;
     onPlayStateChange?.(true);
     startInteractiveTeachingCanvas(teachingLesson, videoDuration);
   };
@@ -658,12 +707,20 @@ const LiveAvatar = forwardRef<LiveAvatarRef, LiveAvatarProps>(function LiveAvata
           className={`w-full h-full max-h-[280px] rounded-xl object-contain bg-black/80 transition-opacity duration-300 ${
             status === 'connected' || isPlaying ? 'opacity-100 block' : 'hidden'
           }`}
+          onTimeUpdate={() => {
+            if (videoSrc && videoRef.current) {
+              const cur = videoRef.current.currentTime;
+              const dur = videoRef.current.duration || videoDuration;
+              if (dur > 0) {
+                const prog = Math.min(Math.round((cur / dur) * 100), 100);
+                setCurrentTime(cur);
+                setVideoProgress(prog);
+                onVideoProgress?.(prog, cur, dur);
+              }
+            }
+          }}
           onEnded={() => {
-            setHasCompleted(true);
-            setIsPlaying(false);
-            setVideoProgress(100);
-            onVideoCompleted?.();
-            onPlayStateChange?.(false);
+            triggerActualCompletion();
           }}
         />
 

@@ -65,7 +65,7 @@ Rules:
 - Do not include anything outside the JSON object.
 """
 
-    models_to_try = ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.8-flash"]
     last_error = None
 
     for model_name in models_to_try:

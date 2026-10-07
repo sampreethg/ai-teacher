@@ -189,7 +189,10 @@ function ClassroomContent() {
   const handleVideoCompleted = useCallback(() => {
     setVideoCompleted(true);
     setVideoProgress(100);
-    setWorkflowState('QUIZ_GENERATION_AVAILABLE');
+    setWorkflowState('VIDEO_COMPLETED');
+    setTimeout(() => {
+      setWorkflowState((prev) => prev === 'VIDEO_COMPLETED' ? 'QUIZ_GENERATION_AVAILABLE' : prev);
+    }, 400);
   }, []);
 
   // Generate Quiz triggered explicitly by student click AFTER video completion
