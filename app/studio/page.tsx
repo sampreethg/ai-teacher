@@ -167,12 +167,7 @@ function StudioContent() {
       })
       .then(data => {
         setNotebookTitle(data.title);
-        // Fallback to preset if it's a seed lesson, otherwise empty sources
-        if (LESSON_PRESETS[lessonId]) {
-          setSources(LESSON_PRESETS[lessonId].defaultSources);
-        } else {
-          setSources([]);
-        }
+        setSources([]);
         setIsPageLoading(false);
       })
       .catch(err => {
@@ -855,39 +850,9 @@ function StudioContent() {
             </div>
 
             <div className="space-y-2">
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-[#2d2f31] bg-white dark:bg-[#1e1f20] hover:border-blue-400 transition-colors cursor-pointer">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-white">
-                  <span>Classical Mechanics (F=ma)</span>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">
-                    Mastered
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-[#8e918f] mt-1">
-                  18 min lecture &bull; 100% Socratic accuracy
-                </p>
-              </div>
-
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-[#2d2f31] bg-white dark:bg-[#1e1f20] hover:border-blue-400 transition-colors cursor-pointer">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-white">
-                  <span>Collections & Memory Specs</span>
-                  <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full">
-                    Saved
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-[#8e918f] mt-1">
-                  HashMap derivations & memory barriers
-                </p>
-              </div>
-
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-[#2d2f31] bg-white dark:bg-[#1e1f20] hover:border-blue-400 transition-colors cursor-pointer">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-white">
-                  <span>OAuth 2.0 PKCE Diagnostic</span>
-                  <span className="text-[10px] text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 px-2 py-0.5 rounded-full">
-                    Score: 94%
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-[#8e918f] mt-1">
-                  RFC 7636 code challenge verification
+              <div className="p-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-[#1e1f20]/50 text-center">
+                <p className="text-xs text-slate-500 dark:text-[#8e918f]">
+                  No recent sessions found.
                 </p>
               </div>
             </div>
