@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -36,15 +36,25 @@ interface Lesson {
   description?: string;
 }
 
-const INITIAL_LESSONS: Lesson[] = [];
-
 export default function DashboardLessonsPage() {
   const router = useRouter();
-  const [lessons, setLessons] = useState<Lesson[]>(INITIAL_LESSONS);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/lessons')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setLessons(data);
+        }
+      })
+      .catch(err => console.error('Failed to fetch lessons:', err));
+  }, []);
 
   const categories = ['All', 'Security & Auth', 'Computer Science', 'AI & ML', 'Physics', 'Biochemistry'];
 
@@ -57,10 +67,37 @@ export default function DashboardLessonsPage() {
     return matchesSearch && matchesCategory;
   });
 
-  const handleDeleteLesson = (id: string, e: React.MouseEvent) => {
+  const handleCreateLesson = async () => {
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      const res = await fetch('/api/lessons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'New Lesson' })
+      });
+      if (res.ok) {
+        const newLesson = await res.json();
+        router.push(`/studio?id=${newLesson.id}`);
+      }
+    } catch (error) {
+      console.error('Failed to create lesson:', error);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteLesson = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    setLessons(prev => prev.filter(l => l.id !== id));
+    try {
+      const res = await fetch(`/api/lessons/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setLessons(prev => prev.filter(l => l.id !== id));
+      }
+    } catch (error) {
+      console.error('Failed to delete lesson:', error);
+    }
     setOpenMenuId(null);
   };
 
@@ -205,20 +242,21 @@ export default function DashboardLessonsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           
           {/* CARD 1 — PRIMARY ACTION: "+ Create new lesson" */}
-          <Link
-            href="/studio"
-            className="border-2 border-dashed border-slate-300 dark:border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 dark:hover:border-blue-500 transition-all min-h-[180px] bg-slate-100/60 dark:bg-[#131722]/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 group shadow-xs hover:shadow-md text-center"
+          <button
+            onClick={handleCreateLesson}
+            disabled={isCreating}
+            className="border-2 border-dashed border-slate-300 dark:border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 dark:hover:border-blue-500 transition-all min-h-[180px] bg-slate-100/60 dark:bg-[#131722]/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 group shadow-xs hover:shadow-md text-center disabled:opacity-50"
           >
             <div className="w-12 h-12 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white group-hover:scale-110 transition-all flex items-center justify-center mb-3 shadow-xs">
               <Plus className="w-6 h-6 stroke-[2.5]" />
             </div>
             <span className="text-sm font-bold text-slate-800 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-              Create new lesson
+              {isCreating ? 'Creating...' : 'Create new lesson'}
             </span>
             <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
               Ingest Books, PDFs & Notes
             </span>
-          </Link>
+          </button>
 
           {/* DYNAMIC LESSON CARDS */}
           {filteredLessons.map((lesson) => (
