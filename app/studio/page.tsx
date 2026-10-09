@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   GraduationCap,
   Plus,
@@ -135,28 +135,51 @@ const LESSON_PRESETS: Record<string, { title: string; defaultSources: SourceItem
 
 function StudioContent() {
   const searchParams = useSearchParams();
-  const lessonId = searchParams.get('id') || 'auth-portal';
-  const initialPreset = LESSON_PRESETS[lessonId] || LESSON_PRESETS['auth-portal'];
+  const router = useRouter();
+  const lessonId = searchParams.get('id');
 
   // Navigation & Panel Toggles
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [notebookTitle, setNotebookTitle] = useState(initialPreset.title);
+  const [notebookTitle, setNotebookTitle] = useState('Loading Lesson...');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
   // Sources State
-  const [sources, setSources] = useState<SourceItem[]>(initialPreset.defaultSources);
+  const [sources, setSources] = useState<SourceItem[]>([]);
   const [sourceSearchQuery, setSourceSearchQuery] = useState('');
   const [isAddSourceModalOpen, setIsAddSourceModalOpen] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
 
-  // Sync with preset when ID changes
+  // Sync with backend when ID changes
   useEffect(() => {
-    if (LESSON_PRESETS[lessonId]) {
-      setNotebookTitle(LESSON_PRESETS[lessonId].title);
-      setSources(LESSON_PRESETS[lessonId].defaultSources);
+    if (!lessonId) {
+      router.push('/dashboard');
+      return;
     }
-  }, [lessonId]);
+
+    fetch(`/api/lessons/${lessonId}`)
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Lesson not found or unauthorized');
+        }
+        return res.json();
+      })
+      .then(data => {
+        setNotebookTitle(data.title);
+        // Fallback to preset if it's a seed lesson, otherwise empty sources
+        if (LESSON_PRESETS[lessonId]) {
+          setSources(LESSON_PRESETS[lessonId].defaultSources);
+        } else {
+          setSources([]);
+        }
+        setIsPageLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        router.push('/dashboard');
+      });
+  }, [lessonId, router]);
 
   // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -165,8 +188,8 @@ function StudioContent() {
       role: 'ai',
       sender: 'ai',
       text: `Welcome to your AI Research & Learning Studio. Inquire about architectural derivations, code flows, or generate diagnostic quizzes grounded in your active study materials.\n\n*What specific concept or question would you like to explore today?*`,
-      citations: [1, 2, 3, 4],
-      timestamp: '11:42 AM'
+      citations: [],
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -293,6 +316,17 @@ function StudioContent() {
     s.title.toLowerCase().includes(sourceSearchQuery.toLowerCase()) ||
     s.snippet.toLowerCase().includes(sourceSearchQuery.toLowerCase())
   );
+
+  if (isPageLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-50 dark:bg-[#131314]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+          <span className="text-sm font-bold text-slate-500">Securing Lesson Workspace...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-50 dark:bg-[#131314] text-slate-900 dark:text-[#e3e3e3] font-sans antialiased transition-colors">
