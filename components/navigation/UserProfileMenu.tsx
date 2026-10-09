@@ -86,6 +86,10 @@ export default function UserProfileMenu() {
   const handleLogout = async () => {
     setIsOpen(false);
     try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.clear();
+        localStorage.clear();
+      }
       await signOut({ callbackUrl: '/login' });
     } catch {
       router.push('/login');
