@@ -113,7 +113,7 @@ export default function LandingPage() {
               Login
             </Link>
             <Link 
-              href="/login" 
+              href="/register" 
               className="relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold text-sm shadow-lg shadow-cyan-500/25 hover:from-cyan-400 hover:to-blue-500 hover:shadow-cyan-500/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
             >
               <Sparkles className="w-4 h-4 text-cyan-200" />
@@ -179,7 +179,7 @@ export default function LandingPage() {
                 Login
               </Link>
               <Link 
-                href="/login" 
+                href="/register" 
                 className="w-full text-center py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold text-sm shadow-md"
               >
                 Register Free Account
@@ -567,7 +567,7 @@ export default function LandingPage() {
                 Try Instant Demo Now
               </Link>
               <Link 
-                href="/login" 
+                href="/register" 
                 className={`px-8 py-4 rounded-xl glass-card border font-semibold text-base transition-all ${
                   isDarkMode 
                     ? 'border-slate-700 text-slate-100 hover:bg-slate-800' 
@@ -616,7 +616,7 @@ export default function LandingPage() {
             <h4 className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Account</h4>
             <ul className={`space-y-2 text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
               <li><Link href="/login" className="hover:text-cyan-500 transition-colors">Student Login</Link></li>
-              <li><Link href="/login" className="hover:text-cyan-500 transition-colors">Register Account</Link></li>
+              <li><Link href="/register" className="hover:text-cyan-500 transition-colors">Register Account</Link></li>
               <li><Link href="/login" className="hover:text-cyan-500 transition-colors">Upload Textbooks</Link></li>
             </ul>
           </div>
