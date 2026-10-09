@@ -90,9 +90,10 @@ export default function UserProfileMenu() {
         sessionStorage.clear();
         localStorage.clear();
       }
-      await signOut({ callbackUrl: '/login' });
+      await signOut({ redirect: false });
+      window.location.href = '/';
     } catch {
-      router.push('/login');
+      window.location.href = '/';
     }
   };
 
