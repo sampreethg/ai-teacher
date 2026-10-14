@@ -28,13 +28,15 @@ import {
   Copy,
   ExternalLink,
   Bot,
-  User as UserIcon
+  User as UserIcon,
+  Play
 } from 'lucide-react';
 
 import AddSourceModal from '@/components/dashboard/AddSourceModal';
 import ThemeToggle from '@/components/ThemeToggle';
 import UserProfileMenu from '@/components/navigation/UserProfileMenu';
 import CustomiseVideoModal from '@/components/studio/CustomiseVideoModal';
+import { addActivity } from '@/lib/activity';
 
 interface SourceItem {
   id: string;
@@ -214,16 +216,63 @@ function StudioContent() {
     setSources(prev => prev.filter(s => s.id !== id));
   };
 
-  const handleAddSource = (newSrc: { title: string; type: 'pdf' | 'web' | 'note'; fileName?: string }) => {
+  const handleAddSource = (newSrc: { title: string; type: 'pdf' | 'web' | 'note'; fileName?: string; extractedText?: string }) => {
+    const srcTitle = newSrc.fileName || newSrc.title;
     const created: SourceItem = {
       id: `s-${Date.now()}`,
-      title: newSrc.fileName || newSrc.title,
+      title: srcTitle,
       type: newSrc.type,
-      snippet: 'Freshly ingested educational document. Ready for grounded synthesis.',
+      snippet: newSrc.extractedText ? newSrc.extractedText.slice(0, 400) : `Educational content for ${srcTitle}. Ready for grounded synthesis.`,
       sourceDate: 'Just now',
       selected: true
     };
     setSources(prev => [created, ...prev]);
+
+    // If lesson title is default, dynamically adopt the source title or URL
+    if (notebookTitle === 'New Lesson' || notebookTitle === 'Loading Lesson...' || notebookTitle === 'Untitled Lesson') {
+      setNotebookTitle(srcTitle);
+      if (lessonId) {
+        fetch(`/api/lessons/${lessonId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: srcTitle, sourceCount: sources.length + 1 })
+        }).catch(err => console.error('Failed to sync lesson title:', err));
+      }
+    }
+
+    addActivity({
+      title: 'Source Ingested',
+      description: `Added "${srcTitle}" to "${notebookTitle}"`,
+      type: 'research'
+    });
+  };
+
+  // Direct Launch Handler: Works whether or not sources are uploaded, or if any source title / URL is present
+  const handleDirectLaunch = () => {
+    const activeSources = sources.filter(s => s.selected !== false);
+    const activeTopic = (activeSources.length > 0 && activeSources[0].title)
+      ? activeSources[0].title
+      : (notebookTitle && notebookTitle !== 'New Lesson' && notebookTitle !== 'Loading Lesson...' && notebookTitle !== 'Untitled Lesson')
+      ? notebookTitle
+      : "Newton's Second Law & Classical Mechanics";
+
+    const queryParams = new URLSearchParams({
+      format: 'explainer',
+      lang: 'en-GB',
+      focus: activeTopic
+    });
+
+    if (activeSources.length > 0) {
+      sessionStorage.setItem('activeSources', JSON.stringify(activeSources));
+    } else {
+      sessionStorage.setItem('activeSources', JSON.stringify([{
+        title: activeTopic,
+        snippet: `Interactive AI Teacher lecture on ${activeTopic}. Real-time derivations and Socratic checkpoints.`,
+        type: 'note'
+      }]));
+    }
+
+    router.push(`/classroom?${queryParams.toString()}`);
   };
 
   // Chat Send Handler - Connects to Secure /api/chat route
@@ -388,14 +437,15 @@ function StudioContent() {
           </button>
 
           {/* Open AI Classroom CTA Pill */}
-          <Link
+          <button
+            type="button"
             id="join-class-studio-btn"
-            href="/classroom"
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm hover:shadow transition-all"
+            onClick={handleDirectLaunch}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm hover:shadow transition-all cursor-pointer"
           >
             <Video className="w-3.5 h-3.5" />
             <span>Join Class</span>
-          </Link>
+          </button>
 
           {/* Global Persistent ThemeToggle */}
           <ThemeToggle />
@@ -830,13 +880,28 @@ function StudioContent() {
                 Launch an adaptive, 1-on-1 visual lecture with real-time blackboard derivations, synchronized speech synthesis, and active Socratic checkpoints.
               </p>
 
-              <button
-                type="button"
-                onClick={() => setIsVideoModalOpen(true)}
-                className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-950 text-xs font-extrabold transition-all shadow-lg hover:shadow-cyan-500/25 group-hover:scale-[1.02] cursor-pointer"
-              >
-                <span>Launch &rarr;</span>
-              </button>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  id="launch-video-lesson-btn"
+                  onClick={handleDirectLaunch}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-950 text-xs font-extrabold transition-all shadow-lg hover:shadow-cyan-500/25 group-hover:scale-[1.01] cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Launch &rarr;</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="customise-video-btn"
+                  onClick={() => setIsVideoModalOpen(true)}
+                  className="py-2.5 px-3 rounded-xl border border-cyan-400/40 hover:bg-cyan-500/10 text-cyan-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                  title="Customise duration, voice, or topic"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Customise</span>
+                </button>
+              </div>
             </div>
           </div>
 

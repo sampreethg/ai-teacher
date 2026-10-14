@@ -24,6 +24,13 @@ import {
 
 import ThemeToggle from '@/components/ThemeToggle';
 import UserProfileMenu from '@/components/navigation/UserProfileMenu';
+import {
+  ActivityItem,
+  getStoredActivities,
+  addActivity,
+  markAllActivitiesRead,
+  getTimeAgo
+} from '@/lib/activity';
 
 interface Lesson {
   id: string;
@@ -39,6 +46,7 @@ interface Lesson {
 export default function DashboardLessonsPage() {
   const router = useRouter();
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -51,6 +59,20 @@ export default function DashboardLessonsPage() {
       .then(data => {
         if (Array.isArray(data)) {
           setLessons(data);
+          const stored = getStoredActivities();
+          if (stored.length > 0) {
+            setActivities(stored);
+          } else if (data.length > 0) {
+            const initial: ActivityItem[] = data.slice(0, 3).map((l, idx) => ({
+              id: `init-${l.id}`,
+              title: idx === 0 ? 'Lesson Ready' : 'Curriculum Synced',
+              description: `"${l.title}" (${l.sourceCount || 0} sources indexed)`,
+              timestamp: Date.now() - (idx + 1) * 3600000,
+              read: false,
+              type: 'lesson'
+            }));
+            setActivities(initial);
+          }
         }
       })
       .catch(err => console.error('Failed to fetch lessons:', err));
@@ -78,6 +100,11 @@ export default function DashboardLessonsPage() {
       });
       if (res.ok) {
         const newLesson = await res.json();
+        addActivity({
+          title: 'Lesson Created',
+          description: `Created new lesson "${newLesson.title || 'Untitled Lesson'}"`,
+          type: 'lesson'
+        });
         router.push(`/studio?id=${newLesson.id}`);
       }
     } catch (error) {
@@ -156,12 +183,14 @@ export default function DashboardLessonsPage() {
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-100 hover:bg-slate-200 dark:bg-[#1a202c] dark:hover:bg-[#252d3d] text-slate-700 dark:text-slate-300 flex items-center justify-center transition-all"
+              className="relative w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-100 hover:bg-slate-200 dark:bg-[#1a202c] dark:hover:bg-[#252d3d] text-slate-700 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer"
               title="Notifications"
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute 1.5 top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-[#131722]" />
+              {activities.some(a => !a.read) && (
+                <span className="absolute 1.5 top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-[#131722]" />
+              )}
             </button>
 
             {/* Notifications Dropdown */}
@@ -169,17 +198,49 @@ export default function DashboardLessonsPage() {
               <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white dark:bg-[#1a202c] border border-slate-200 dark:border-slate-700 shadow-xl p-3 z-40 animate-scaleIn text-xs">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
                   <span className="font-bold text-slate-800 dark:text-white">Recent Activity</span>
-                  <span className="text-[10px] text-blue-500 font-semibold cursor-pointer">Mark read</span>
+                  {activities.some(a => !a.read) && (
+                    <button
+                      onClick={() => {
+                        markAllActivitiesRead();
+                        setActivities(prev => prev.map(a => ({ ...a, read: true })));
+                      }}
+                      className="text-[10px] text-blue-500 hover:text-blue-600 font-semibold cursor-pointer"
+                    >
+                      Mark read
+                    </button>
+                  )}
                 </div>
-                <div className="py-2 space-y-2">
-                  <div className="p-2 rounded-lg bg-blue-50/50 dark:bg-blue-950/30 text-slate-700 dark:text-slate-300">
-                    <p className="font-semibold text-blue-600 dark:text-blue-400">Fast Research Completed</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">5 sources in &ldquo;Google Auth Portal&rdquo; ingested and indexed.</p>
-                  </div>
-                  <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300">
-                    <p className="font-semibold text-slate-800 dark:text-white">Socratic Checkpoint Passed</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Scored 94% on OAuth 2.0 PKCE Diagnostic.</p>
-                  </div>
+                <div className="py-2 space-y-2 max-h-72 overflow-y-auto">
+                  {activities.length === 0 ? (
+                    <div className="py-6 px-3 text-center text-slate-400 dark:text-slate-500 space-y-1">
+                      <Clock className="w-5 h-5 mx-auto text-slate-300 dark:text-slate-600 mb-1" />
+                      <p className="font-medium text-slate-600 dark:text-slate-400">No recent activity yet</p>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">Activities will appear as you create lessons and explore studio.</p>
+                    </div>
+                  ) : (
+                    activities.map((act) => (
+                      <div
+                        key={act.id}
+                        className={`p-2.5 rounded-lg transition-all ${
+                          !act.read
+                            ? 'bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50'
+                            : 'bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <p className={`font-semibold ${!act.read ? 'text-blue-600 dark:text-blue-400' : 'text-slate-800 dark:text-white'}`}>
+                            {act.title}
+                          </p>
+                          <span className="text-[10px] text-slate-400 shrink-0">
+                            {getTimeAgo(act.timestamp)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                          {act.description}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

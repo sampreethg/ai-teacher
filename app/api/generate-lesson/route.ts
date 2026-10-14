@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 import { GoogleGenAI } from '@google/genai';
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Authentication required to generate lessons.' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { pdfText, topic } = body;
 
